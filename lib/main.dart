@@ -6,25 +6,25 @@ import 'package:flutter/material.dart';
 import 'package:fruitgame/game.dart';
 import 'package:fruitgame/vision_detector_views/detector_views.dart';
 
+import 'main_menu.dart';
+
 List<CameraDescription> cameras = [];
 final Changer changer = Changer();
 
+MyGame fruitGame = MyGame();
+
 Future<void> main() async {
-  // Ensures that all bindings are initialized
-  // before was start calling hive and flame code
-  // dealing with platform channels.
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Makes the game full screen and landscape only.
   Flame.device.fullScreen();
   Flame.device.setPortrait();
   cameras = await availableCameras();
-  
-  runApp(const JustStyle());
+
+  runApp(const FruitPose());
 }
 
-class JustStyle extends StatelessWidget {
-  const JustStyle({super.key});
+class FruitPose extends StatelessWidget {
+  const FruitPose({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -37,9 +37,16 @@ class JustStyle extends StatelessWidget {
           //   child: FaceDetectorView(),
           // ),
           SizedBox(
-            height: 500,
+            height: 400,
             child: GameWidget(
-              game: MyGame(),
+              game: fruitGame ,
+              overlayBuilderMap: {
+                'MainMenu': (BuildContext context, MyGame game) {
+                  return MainMenu(
+                    gameRef: fruitGame,
+                  );
+                }
+              },
             ),
           ),
         ],

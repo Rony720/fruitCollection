@@ -10,6 +10,13 @@ import 'package:flutter/services.dart';
 import 'package:flame_texturepacker/flame_texturepacker.dart';
 import 'package:flame/widgets.dart';
 
+import 'package:flame_audio/flame_audio.dart';
+import 'package:fruitgame/main.dart';
+
+import 'main_menu.dart';
+
+String overlayId = 'MainMenu';
+
 List<SpriteComponent> fruits = [];
 
 // values based on postion for collision
@@ -31,26 +38,10 @@ String currentPosition = "CENTER"; // LEFT OR CENTER OR RIGHT
 
 String head = "RIGHT"; // LEFT OR RIGHT
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await SystemChrome.setEnabledSystemUIMode(
-    SystemUiMode.immersive,
-    overlays: [],
-  );
-
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
-  ]);
-  runApp(
-    GameWidget(
-      game: MyGame(),
-    ),
-  );
-}
-
 class MyGame extends FlameGame with HasTappables {
+  bool isGamePaused = true;
   late TextComponent textComponent;
+  late TextComponent remainingLifeComponent;
 
   SpriteComponent gameBackground = SpriteComponent();
   SpriteComponent boy = SpriteComponent();
@@ -61,12 +52,14 @@ class MyGame extends FlameGame with HasTappables {
 
   LeftButton lButton = LeftButton();
   RightButton rButton = RightButton();
+  PauseButton pauseButton = PauseButton();
 
   late SpriteAnimationComponent boyWalking;
 
   List<SpriteComponent> fruits = [];
 
-  int fruitCollected = -1;
+  int fruitCollected = 0;
+  int remainingLife = 5;
   int delete = 0;
 
   @override
@@ -80,7 +73,7 @@ class MyGame extends FlameGame with HasTappables {
       ..size = size;
     add(gameBackground);
 
-    // Score
+    // Score and remaning Life
     TextPaint scoreText = TextPaint(
         style: const TextStyle(
             fontSize: 15, color: Color.fromARGB(255, 227, 19, 4)));
@@ -91,6 +84,17 @@ class MyGame extends FlameGame with HasTappables {
         textRenderer: scoreText);
 
     add(textComponent);
+
+    TextPaint remainingLifeText = TextPaint(
+        style: const TextStyle(
+            fontSize: 15, color: Color.fromARGB(255, 227, 19, 4)));
+
+    remainingLifeComponent = TextComponent(
+        text: "REMAINING LIFE :5",
+        position: Vector2(size[0] * .10, size[1] * .3),
+        textRenderer: remainingLifeText);
+
+    add(remainingLifeComponent);
 
     // Boy
 
@@ -112,6 +116,16 @@ class MyGame extends FlameGame with HasTappables {
       ..y = size[1] * .1;
 
     //add(lButton);
+
+    // Pause Button
+
+    pauseButton
+      ..sprite = await loadSprite('pauseButton.png')
+      ..size = Vector2(30, 30)
+      ..x = size[0] * .5
+      ..y = size[1] * .07;
+
+    add(pauseButton);
 
     // Right Button
     rButton
@@ -172,45 +186,59 @@ class MyGame extends FlameGame with HasTappables {
         period: 5,
         repeat: true,
         onTick: () async {
-          SpriteComponent newFruit = SpriteComponent();
-          double orangeX = size[0] * .1;
-          for (int i = fruits.length - 1; i >= 0; i--) {
-            var fruit = fruits[i];
-            if (fruit.x >= 5000) {
-              fruit.x = 6000;
-              fruits.removeAt(i);
+          if (!isGamePaused) {
+            SpriteComponent newFruit = SpriteComponent();
+            double orangeX = size[0] * .1;
+            for (int i = fruits.length - 1; i >= 0; i--) {
+              var fruit = fruits[i];
+              if (fruit.x >= 5000) {
+                fruit.x = 6000;
+                fruits.removeAt(i);
+              }
             }
+
+            // random number
+            var random = Random();
+            var randomNumber = random.nextInt(3);
+            if (randomNumber == 0)
+              orangeX = size[0] * .1;
+            else if (randomNumber == 1)
+              orangeX = size[0] * .4;
+            else if (randomNumber == 2) orangeX = size[0] * .7;
+            newFruit
+              ..sprite = await loadSprite('orange.png')
+              ..size = Vector2(30, 30)
+              ..x = orangeX
+              ..y = size[1] * .15;
+
+            fruits.add(newFruit);
+            print("new fruit y is ${newFruit.position.y}");
+            add(newFruit);
+            print(fruits.length);
           }
-
-          // random number
-          var random = Random();
-          var randomNumber = random.nextInt(3);
-          if (randomNumber == 0)
-            orangeX = size[0] * .1;
-          else if (randomNumber == 1)
-            orangeX = size[0] * .4;
-          else if (randomNumber == 2) orangeX = size[0] * .7;
-          newFruit
-            ..sprite = await loadSprite('orange.png')
-            ..size = Vector2(30, 30)
-            ..x = orangeX
-            ..y = size[1] * .15;
-
-          fruits.add(newFruit);
-          print("new fruit y is ${newFruit.position.y}");
-          add(newFruit);
-          print(fruits.length);
         }));
 
     print("boy y is ${boy.y}");
+
+    // Loading audio
+    FlameAudio.audioCache.loadAll(['failSound.mp3']);
+
+    overlays.add('MainMenu');
   }
 
   @override
   void update(double dt) {
     super.update(dt);
 
+    if (isGamePaused) {
+      return;
+    }
+
     final newText = "SCORE :${fruitCollected}";
     textComponent.text = newText;
+
+    final newRemainingLifeText = "REMAINING LIFE :${remainingLife}";
+    remainingLifeComponent.text = newRemainingLifeText;
 
     // To remove boy character
 
@@ -296,7 +324,9 @@ class MyGame extends FlameGame with HasTappables {
       // if the fruit has reached the bottom of the screen, reset its position to the top
       if (fruit.position.y > size.y - size.y * .1) {
         fruit.size = Vector2(100, 100);
+        if (fruit.position.x != 5000) remainingLife -= 1;
         fruit.position.x = 5000;
+        FlameAudio.play('failSound.mp3');
       }
 
       // collision CENTER
@@ -314,6 +344,7 @@ class MyGame extends FlameGame with HasTappables {
       if (fruit.position.x == size[0] * .7 && currentPosition == "RIGHT") {
         if (fruit.position.y >= boy.y) {
           print("HIT RIGHT");
+
           fruitCollected++;
           fruit.y = 0;
           fruit.x = 20000;
@@ -325,6 +356,7 @@ class MyGame extends FlameGame with HasTappables {
       if (fruit.position.x == size[0] * .1 && currentPosition == "LEFT") {
         if (fruit.position.y >= boy.y) {
           print("HIT LEFT");
+
           fruitCollected++;
           fruit.y = 0;
           fruit.x = 20000;
@@ -332,9 +364,7 @@ class MyGame extends FlameGame with HasTappables {
       }
     }
   }
-
 }
-
 
 class LeftButton extends SpriteComponent with Tappable {
   @override
@@ -355,6 +385,20 @@ class LeftButton extends SpriteComponent with Tappable {
         currentPosition = "";
         print(positionReachingAfterRun);
       }
+      return super.onTapDown(info);
+    } catch (e) {
+      print(e);
+      return false;
+    }
+  }
+}
+
+class PauseButton extends SpriteComponent with Tappable {
+  @override
+  bool onTapDown(TapDownInfo info) {
+    try {
+      fruitGame.overlays.add('MainMenu');
+
       return super.onTapDown(info);
     } catch (e) {
       print(e);
@@ -389,37 +433,36 @@ class RightButton extends SpriteComponent with Tappable {
   }
 }
 
+void leftControl() {
+  if ((currentPosition == "CENTER" || currentPosition == "RIGHT") && !busy) {
+    distanceRun = 0;
+    boyRemoved = true;
+    runLeft = true;
+    busy = true;
 
-  void leftControl() {
-    if ((currentPosition == "CENTER" || currentPosition == "RIGHT") && !busy) {
-      distanceRun = 0;
-      boyRemoved = true;
-      runLeft = true;
-      busy = true;
+    // New position
+    currentPosition == "CENTER"
+        ? positionReachingAfterRun = "LEFT"
+        : positionReachingAfterRun = "CENTER";
 
-      // New position
-      currentPosition == "CENTER"
-          ? positionReachingAfterRun = "LEFT"
-          : positionReachingAfterRun = "CENTER";
-
-      currentPosition = "";
-      print(positionReachingAfterRun);
-    }
+    currentPosition = "";
+    print(positionReachingAfterRun);
   }
+}
 
-  void rightControl() {
-    if ((currentPosition == "CENTER" || currentPosition == "LEFT") && !busy) {
-      distanceRun = 0;
-      boyRemoved = true;
-      runRight = true;
-      busy = true;
+void rightControl() {
+  if ((currentPosition == "CENTER" || currentPosition == "LEFT") && !busy) {
+    distanceRun = 0;
+    boyRemoved = true;
+    runRight = true;
+    busy = true;
 
-      // New position
-      currentPosition == "CENTER"
-          ? positionReachingAfterRun = "RIGHT"
-          : positionReachingAfterRun = "CENTER";
+    // New position
+    currentPosition == "CENTER"
+        ? positionReachingAfterRun = "RIGHT"
+        : positionReachingAfterRun = "CENTER";
 
-      currentPosition = "";
-      print(positionReachingAfterRun);
-    }
+    currentPosition = "";
+    print(positionReachingAfterRun);
   }
+}
